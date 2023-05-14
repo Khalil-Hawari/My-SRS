@@ -1,52 +1,63 @@
 import 'dart:collection';
-import 'dart:developer';
+// import 'dart:developer';
 
 import 'package:flutter/material.dart';
+
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+
 import 'package:provider/provider.dart';
 import 'package:telephony/telephony.dart';
 
-// final Telephony telephony = Telephony.instance;
+Telephony telephony = Telephony.instance;
+List<SmsMessage> messageList = [];
 
-// backgroundMessageHandler(SmsMessage message) async {
-//   //Handle background message
-//   log('$message.address'); //+977981******67, sender nubmer
-//   log('$message.body'); //sms text
-//   log('$message.date');
-// }
+@pragma('vm:entry-point')
+onBackgroundMessage(SmsMessage message) async {
+  debugPrint("NEW-BACK onBackgroundMessage called");
+  debugPrint("Back hash: ${messageList.hashCode}");
 
-// Future<List<SmsMessage>> messages = telephony.getInboxSms(
-//     columns: [SmsColumn.ADDRESS, SmsColumn.BODY],
-//     filter: SmsFilter.where(SmsColumn.ADDRESS)
-//         .equals("1234567890")
-//         .and(SmsColumn.BODY)
-//         .like("starwars"),
-//     sortOrder: [
-//       OrderBy(SmsColumn.ADDRESS, sort: Sort.ASC),
-//       OrderBy(SmsColumn.BODY)
-//     ]);
+  await Hive.initFlutter("hive");
+  var box = await Hive.openBox('smsRelay');
+  List storedMessages = box.get('messageList', defaultValue: []);
+  debugPrint('OnBack hive: ${storedMessages.length}');
 
-void main() {
+  storedMessages.add({"body": message.body, "sender": message.address});
+  box.put('messageList', storedMessages);
+  await box.close();
+  messageList.add(message);
+  debugPrint('OnBack: ${messageList.length}');
+}
+
+void main() async {
+  await Hive.initFlutter("hive");
   runApp(const MyApp());
 }
 
 class MyAppState extends ChangeNotifier {
   // String _message = "";
-  var telephony = Telephony.instance;
-  static List<SmsMessage> messageList = [];
+  // var telephony = Telephony.instance;
+  // static List<SmsMessage> messageList = [];
 
-  List<SmsMessage>? get messages => UnmodifiableListView(messageList);
+  // var telephony = TelephonyManager().telephony;
+  // List<SmsMessage> messageList = TelephonyManager.messageList;
 
-  static onBackgroundMessageInState(SmsMessage message) async {
-    debugPrint("RELAY onBackgroundMessageInState called");
-    messageList.add(message);
-    debugPrint('OnBack: ' + messageList.length.toString());
-    // debugPrint(message.body ?? "Error reading message body.");
-  }
+  List<SmsMessage> get messages => UnmodifiableListView(messageList);
 
   onMessage(SmsMessage message) async {
     debugPrint('OnMessage RELAY Called');
+    debugPrint("front hash: ${messageList.hashCode}");
     messageList.add(message);
-    debugPrint("onMessage: " + messageList.length.toString());
+    debugPrint("onMessage: ${messageList.length}");
+
+    var box = await Hive.openBox('smsRelay');
+    List storedMessages = box.get('messageList', defaultValue: []);
+    debugPrint('onMessage hive: ${storedMessages.length}');
+
+    storedMessages.add({"body": message.body, "sender": message.address});
+    box.put('messageList', storedMessages);
+    await box.close();
+
     notifyListeners();
     // setState(() {
     //   _message = message.body ?? "Error reading message body.";
@@ -65,8 +76,9 @@ class MyAppState extends ChangeNotifier {
     if (result != null && result) {
       debugPrint('INIT PLATFORM STATE');
       telephony.listenIncomingSms(
-          onNewMessage: onMessage,
-          onBackgroundMessage: onBackgroundMessageInState);
+        onNewMessage: onMessage,
+        onBackgroundMessage: onBackgroundMessage,
+      );
     }
 
     // if (!mounted) return;
@@ -145,7 +157,7 @@ class _MyHomePageState extends State<MyHomePage> {
         // the App.build method, and use it to set our appbar title.
         title: Text(widget.title),
       ),
-      body: Center(
+      body: const Center(
           // Center is a layout widget. It takes a single child and positions it
           // in the middle of the parent.
           child: Column(
@@ -164,7 +176,7 @@ class _MyHomePageState extends State<MyHomePage> {
         // axis because Columns are vertical (the cross axis would be
         // horizontal).
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
+        children: [
           SMSStream(),
         ],
       )),
@@ -181,43 +193,12 @@ class SMSStream extends StatelessWidget {
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
     var messages = appState.messages;
-    debugPrint("listvew: " + messages!.length.toString());
+    debugPrint("listvew: ${messages.length}");
     return Expanded(
       child: ListView(children: [
-        for (var msg in messages!)
+        for (var msg in messages)
           MsgCard(message: msg.body!, sender: msg.address!),
-      ]
-          // const <MsgCard>[
-          //   MsgCard(sender: 'Mr. 1'),
-          //   MsgCard(sender: 'Mr. 2'),
-          //   MsgCard(sender: 'Ms. 3'),
-          //   MsgCard(sender: 'Mrs. 4'),
-          //   MsgCard(sender: 'Mr. 1'),
-          //   MsgCard(sender: 'Mr. 2'),
-          //   MsgCard(sender: 'Ms. 3'),
-          //   MsgCard(sender: 'Mrs. 4'),
-          //   MsgCard(sender: 'Mr. 1'),
-          //   MsgCard(sender: 'Mr. 2'),
-          //   MsgCard(sender: 'Ms. 3'),
-          //   MsgCard(sender: 'Mrs. 4'),
-          //   MsgCard(sender: 'Mr. 1'),
-          //   MsgCard(sender: 'Mr. 2'),
-          //   MsgCard(sender: 'Ms. 3'),
-          //   MsgCard(sender: 'Mrs. 4'),
-          //   MsgCard(sender: 'Mr. 1'),
-          //   MsgCard(sender: 'Mr. 2'),
-          //   MsgCard(sender: 'Ms. 3'),
-          //   MsgCard(sender: 'Mrs. 4'),
-          //   MsgCard(sender: 'Mr. 1'),
-          //   MsgCard(sender: 'Mr. 2'),
-          //   MsgCard(sender: 'Ms. 3'),
-          //   MsgCard(sender: 'Mrs. 4'),
-          //   MsgCard(sender: 'Mr. 1'),
-          //   MsgCard(sender: 'Mr. 2'),
-          //   MsgCard(sender: 'Ms. 3'),
-          //   MsgCard(sender: 'Mrs. 4'),
-          // ],
-          ),
+      ]),
     );
   }
 }
@@ -236,7 +217,7 @@ class MsgCard extends StatelessWidget {
           children: <Widget>[
             ListTile(
               leading: const Icon(Icons.message),
-              title: Text('$message'),
+              title: Text(message),
               subtitle: Text('from: $sender'),
             ),
             Row(
